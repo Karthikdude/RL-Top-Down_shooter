@@ -294,7 +294,7 @@ export const Game = {
             
             if (this.state.botTimer >= CONFIG.BOT.REACTION_TIME) {
                 this.state.botTimer = 0;
-                const action = getBotAction(this.state);
+                const action = getBotAction(this.state, b, p);
                 b.targetMoveX = action.moveX;
                 b.targetMoveY = action.moveY;
                 b.angle = action.aimAngle;

@@ -227,6 +227,10 @@
         #outcome-title { font-size: 64px; }
         .win { color: #4ade80; text-shadow: 0 0 20px rgba(74, 222, 128, 0.5); }
         .lose { color: #f87171; text-shadow: 0 0 20px rgba(248, 113, 113, 0.5); }
+        
+        #afk-overlay { pointer-events: none; background: rgba(0,0,0,0.4); }
+        #afk-overlay h1 { color: #fbbf24; text-shadow: 0 0 10px #f59e0b; }
+        #afk-overlay b { color: #fff; background: #333; padding: 2px 6px; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -289,6 +293,11 @@
             GOLD increases your HP and DAMAGE automatically.<br>
             SHIFT for SHIELD. SPACE for DASH.</p>
             <button id="start-btn">Start Game</button>
+        </div>
+        
+        <div id="afk-overlay" class="screen hidden">
+            <h1>AFK AUTOPILOT</h1>
+            <p>You have been inactive for too long.<br>Press <b>C</b> to take control.</p>
         </div>
 
         <div id="game-over-screen" class="screen hidden">

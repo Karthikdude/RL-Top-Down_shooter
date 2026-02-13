@@ -1,5 +1,5 @@
 export const Input = {
-    keys: { w: false, a: false, s: false, d: false, r: false, ' ': false, 'shift': false } as Record<string, boolean>,
+    keys: { w: false, a: false, s: false, d: false, r: false, ' ': false, 'shift': false, c: false } as Record<string, boolean>,
     mouse: { x: 0, y: 0, down: false },
 
     init(canvas: HTMLCanvasElement) {

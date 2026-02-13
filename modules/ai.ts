@@ -1,26 +1,25 @@
 import { CONFIG } from './config';
-import { GameState } from './types';
+import { GameState, Entity } from './types';
 import { hasLineOfSight, checkWallCollision } from './physics';
 
-// BOT AI V1.1 - "The Pro Update"
-// Features: Obstacle Avoidance, Kiting, Strafing, Smart Farming, Dashing, Shielding
+// BOT AI V1.2 - Generic Implementation (Supports Player Autopilot)
 
-export function getBotAction(gameState: GameState) {
-    const b = gameState.bot;
-    const p = gameState.player;
-    
-    let action = { moveX: 0, moveY: 0, aimAngle: b.angle, shoot: false, reload: false, dash: false, shield: false };
-    if (b.dead) return action;
+export function getBotAction(gameState: GameState, me: Entity, enemy: Entity) {
+    let action = { moveX: 0, moveY: 0, aimAngle: me.angle, shoot: false, reload: false, dash: false, shield: false };
+    if (me.dead) return action;
+
+    const spawn = me.team === 'player' ? CONFIG.SPAWNS.PLAYER : CONFIG.SPAWNS.BOT;
+    const range = me.team === 'player' ? CONFIG.PLAYER.RANGE : CONFIG.BOT.RANGE;
+    const aimError = me.team === 'player' ? 0 : CONFIG.BOT.AIM_ERROR; // Player bot has perfect aim (optional)
 
     // --- 1. STATE ANALYSIS ---
-    const hpPercent = b.hp / b.maxHp;
-    const ammoPercent = b.ammo / CONFIG.AMMO.MAX;
-    const distToPlayer = !p.dead ? Math.sqrt((p.x - b.x)**2 + (p.y - b.y)**2) : Infinity;
+    const hpPercent = me.hp / me.maxHp;
+    const distToEnemy = !enemy.dead ? Math.sqrt((enemy.x - me.x)**2 + (enemy.y - me.y)**2) : Infinity;
     
     // Check if in fountain
-    const startX = CONFIG.SPAWNS.BOT.x;
-    const startY = CONFIG.SPAWNS.BOT.y;
-    const distToFountain = Math.sqrt((b.x - startX)**2 + (b.y - startY)**2);
+    const startX = spawn.x;
+    const startY = spawn.y;
+    const distToFountain = Math.sqrt((me.x - startX)**2 + (me.y - startY)**2);
     const inFountain = distToFountain < CONFIG.FOUNTAIN.RADIUS;
 
     // Determine Strategic Mode
@@ -32,34 +31,33 @@ export function getBotAction(gameState: GameState) {
     } else if (inFountain && hpPercent < 0.95) {
         // Hysteresis: If we are already healing, stay until full
         mode = 'RETREAT';
-    } else if (!p.dead && distToPlayer < CONFIG.BOT.RANGE * 1.5) {
-        // If we have advantage, or player is close, fight
-        if (hpPercent > 0.5 || distToPlayer < CONFIG.BOT.RANGE) {
+    } else if (!enemy.dead && distToEnemy < range * 1.5) {
+        // If we have advantage, or enemy is close, fight
+        if (hpPercent > 0.5 || distToEnemy < range) {
             mode = 'ENGAGE';
         }
     } else {
-        // No player threat? Farm minions or Push towers
+        // No enemy threat? Farm minions or Push towers
         mode = 'FARM';
     }
 
     // --- SKILL LOGIC: SHIELD ---
-    // Use shield if fighting and HP is getting low, or if retreating critically
     if ((mode === 'ENGAGE' && hpPercent < 0.5) || (mode === 'RETREAT' && hpPercent < 0.3)) {
         action.shield = true;
     }
 
     // --- 2. TARGET SELECTION ---
-    let target: {x: number, y: number, vx?: number, vy?: number} | null = null;
+    let target: {x: number, y: number} | null = null;
     let desiredDist = 0;
 
     if (mode === 'RETREAT') {
         // Run to own Spawn point (Fountain)
-        target = { x: CONFIG.SPAWNS.BOT.x, y: CONFIG.SPAWNS.BOT.y };
+        target = { x: startX, y: startY };
         desiredDist = 0; // Go all the way
     } 
     else if (mode === 'ENGAGE') {
-        target = p;
-        desiredDist = CONFIG.BOT.RANGE * 0.8; // Kite range
+        target = enemy;
+        desiredDist = range * 0.8; // Kite range
     } 
     else if (mode === 'FARM') {
         // Find lowest HP minion to last hit
@@ -67,9 +65,9 @@ export function getBotAction(gameState: GameState) {
         let minHP = Infinity;
         
         for (const m of gameState.minions) {
-            if (m.dead || m.team === 'bot') continue;
+            if (m.dead || m.team === me.team) continue;
             // Only care if close enough to be relevant
-            const d = Math.sqrt((m.x - b.x)**2 + (m.y - b.y)**2);
+            const d = Math.sqrt((m.x - me.x)**2 + (m.y - me.y)**2);
             if (d < 800 && m.hp < minHP) {
                 minHP = m.hp;
                 bestMinion = m;
@@ -78,29 +76,28 @@ export function getBotAction(gameState: GameState) {
 
         if (bestMinion) {
             target = bestMinion;
-            desiredDist = CONFIG.BOT.RANGE * 0.9;
+            desiredDist = range * 0.9;
         } else {
-            // No minions? Push closest tower
-            const enemyTowers = gameState.towers.filter(t => t.team === 'player' && !t.dead);
-            enemyTowers.sort((t1, t2) => t2.x - t1.x); // Closest to bot side
+            // No minions? Push closest enemy tower
+            const enemyTowers = gameState.towers.filter(t => t.team !== me.team && !t.dead);
+            // Sort by distance to me to find the closest one to push
+            enemyTowers.sort((t1, t2) => {
+                const d1 = (t1.x - me.x)**2 + (t1.y - me.y)**2;
+                const d2 = (t2.x - me.x)**2 + (t2.y - me.y)**2;
+                return d1 - d2;
+            });
             
-            let closestT = null;
-            let closestD = Infinity;
-            for(const t of enemyTowers) {
-                const d = Math.sqrt((t.x - b.x)**2 + (t.y - b.y)**2);
-                if (d < closestD) { closestD = d; closestT = t; }
-            }
-            if (closestT) {
-                target = closestT;
-                desiredDist = CONFIG.BOT.RANGE * 0.9;
+            if (enemyTowers.length > 0) {
+                target = enemyTowers[0];
+                desiredDist = range * 0.9;
             }
         }
     }
 
     // --- 3. MOVEMENT EXECUTION ---
     if (target) {
-        const dx = target.x - b.x;
-        const dy = target.y - b.y;
+        const dx = target.x - me.x;
+        const dy = target.y - me.y;
         const dist = Math.sqrt(dx*dx + dy*dy);
         const angleToTarget = Math.atan2(dy, dx);
 
@@ -108,7 +105,7 @@ export function getBotAction(gameState: GameState) {
              // Look where we are going
              action.aimAngle = Math.atan2(action.moveY, action.moveX); 
         } else {
-             action.aimAngle = angleToTarget + (Math.random() - 0.5) * CONFIG.BOT.AIM_ERROR;
+             action.aimAngle = angleToTarget + (Math.random() - 0.5) * aimError;
         }
 
         // Tactical Movement Vector
@@ -129,7 +126,7 @@ export function getBotAction(gameState: GameState) {
                 moveDirX = Math.cos(angleToTarget);
                 moveDirY = Math.sin(angleToTarget);
                 // DASH LOGIC: Gap Close
-                if (mode === 'ENGAGE' && dist > CONFIG.BOT.RANGE + 200) action.dash = true;
+                if (mode === 'ENGAGE' && dist > range + 200) action.dash = true;
 
             } else if (dist < desiredDist - 50) {
                 // Back off
@@ -145,8 +142,10 @@ export function getBotAction(gameState: GameState) {
 
         // --- OBSTACLE AVOIDANCE ---
         const avoidanceLookAhead = 60;
+        const radius = me.team === 'player' ? CONFIG.PLAYER.RADIUS : CONFIG.BOT.RADIUS;
+        
         const checkCollision = (vx: number, vy: number) => {
-            return checkWallCollision(b.x + vx * avoidanceLookAhead, b.y + vy * avoidanceLookAhead, CONFIG.BOT.RADIUS + 5);
+            return checkWallCollision(me.x + vx * avoidanceLookAhead, me.y + vy * avoidanceLookAhead, radius + 5);
         };
 
         if (checkCollision(moveDirX, moveDirY)) {
@@ -176,16 +175,16 @@ export function getBotAction(gameState: GameState) {
         action.moveY = moveDirY;
 
         // Shooting Logic
-        if ((mode === 'ENGAGE' || mode === 'FARM') && dist < CONFIG.BOT.RANGE + 50) {
-            if (hasLineOfSight(b.x, b.y, target.x, target.y)) {
+        if ((mode === 'ENGAGE' || mode === 'FARM') && dist < range + 50) {
+            if (hasLineOfSight(me.x, me.y, target.x, target.y)) {
                 action.shoot = true;
             }
         }
     }
 
     // Auto Reload
-    if (b.ammo <= 0 && !b.reloading) action.reload = true;
-    if (mode === 'RETREAT' && b.ammo < CONFIG.AMMO.MAX) action.reload = true; 
+    if (me.ammo <= 0 && !me.reloading) action.reload = true;
+    if (mode === 'RETREAT' && me.ammo < CONFIG.AMMO.MAX) action.reload = true; 
 
     return action;
 }
