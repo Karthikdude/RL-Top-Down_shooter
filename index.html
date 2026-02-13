@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Arena 1v1</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #1a1a1a;
+            font-family: system-ui, -apple-system, sans-serif;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            user-select: none;
+        }
+
+        #game-container {
+            position: relative;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+            width: auto;
+            height: auto;
+            max-width: 95vw;
+            max-height: 95vh;
+            aspect-ratio: 16/9;
+        }
+
+        canvas {
+            background-color: #252525;
+            display: block;
+            border-radius: 4px;
+            cursor: crosshair;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* HUD */
+        .hud-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .bar-group {
+            position: absolute;
+            top: 20px;
+            width: 280px;
+        }
+
+        #p1-group { left: 20px; }
+        #p2-group { right: 20px; }
+
+        .health-bar-container {
+            width: 100%;
+            height: 24px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #444;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 5px;
+            position: relative;
+        }
+
+        .shield-bar-container {
+            width: 100%;
+            height: 8px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid #444;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 2px;
+        }
+
+        .health-fill {
+            height: 100%;
+            width: 100%;
+            transition: width 0.1s linear, background-color 0.2s;
+        }
+        
+        .shield-fill {
+            height: 100%;
+            width: 100%;
+            background-color: #22d3ee;
+            transition: width 0.1s linear;
+        }
+
+        #p1-health .health-fill { background-color: #4ade80; }
+        #p2-health .health-fill { background-color: #f87171; }
+
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-top: 5px;
+        }
+
+        .label {
+            font-size: 16px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            text-shadow: 1px 1px 2px black;
+        }
+        #p1-label { color: #4ade80; }
+        #p2-label { color: #f87171; text-align: right; }
+
+        .gold-display {
+            font-size: 14px;
+            color: #fbbf24; /* Amber/Gold */
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .ammo-small {
+            font-size: 14px;
+            color: #ccc;
+            font-family: monospace;
+            font-weight: bold;
+        }
+
+        /* SKILLS PANEL */
+        #skills-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            gap: 15px;
+        }
+
+        .skill-box {
+            position: relative;
+            width: 60px;
+            height: 60px;
+            background: rgba(0,0,0,0.7);
+            border: 2px solid #475569;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .skill-key {
+            position: absolute;
+            top: 2px;
+            left: 4px;
+            font-size: 10px;
+            color: #94a3b8;
+            font-weight: bold;
+        }
+
+        .skill-icon {
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            z-index: 2;
+        }
+
+        .skill-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 0%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 3;
+            transition: height 0.1s linear;
+        }
+
+        .skill-cd-text {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            top: 20px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #facc15;
+            z-index: 4;
+            text-shadow: 1px 1px 0 #000;
+        }
+
+        /* SCREENS */
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: auto;
+            z-index: 10;
+        }
+
+        .hidden { display: none !important; }
+
+        h1 { font-size: 48px; margin-bottom: 10px; text-transform: uppercase; color: #fff; text-shadow: 0 0 10px #4ade80; }
+        p { font-size: 18px; color: #aaa; margin-bottom: 30px; max-width: 500px; text-align: center; line-height: 1.5; }
+        
+        button {
+            padding: 15px 40px;
+            font-size: 20px;
+            font-weight: bold;
+            color: #1a1a1a;
+            background: #4ade80;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: transform 0.1s, background 0.2s;
+            text-transform: uppercase;
+        }
+        button:hover { background: #22c55e; transform: scale(1.05); }
+        button:active { transform: scale(0.95); }
+
+        #outcome-title { font-size: 64px; }
+        .win { color: #4ade80; text-shadow: 0 0 20px rgba(74, 222, 128, 0.5); }
+        .lose { color: #f87171; text-shadow: 0 0 20px rgba(248, 113, 113, 0.5); }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="1024" height="768"></canvas>
+
+        <div class="hud-layer" id="hud">
+            <!-- Player HUD -->
+            <div id="p1-group" class="bar-group">
+                <div class="shield-bar-container">
+                    <div class="shield-fill" id="p1-shield-fill"></div>
+                </div>
+                <div id="p1-health" class="health-bar-container">
+                    <div class="health-fill" id="p1-health-fill"></div>
+                </div>
+                <div class="status-row">
+                    <span class="label" id="p1-label">YOU <span id="p1-lvl" style="font-size: 0.8em; color: white;">(LVL 1)</span></span>
+                    <span class="gold-display">💰 <span id="p1-gold">0</span></span>
+                </div>
+                <div class="status-row">
+                     <span class="ammo-small" id="ammo-display">30 / 30</span>
+                </div>
+            </div>
+
+            <!-- Bot HUD -->
+            <div id="p2-group" class="bar-group">
+                <div class="shield-bar-container">
+                    <div class="shield-fill" id="p2-shield-fill"></div>
+                </div>
+                <div id="p2-health" class="health-bar-container">
+                    <div class="health-fill" id="p2-health-fill"></div>
+                </div>
+                <div class="status-row">
+                    <span class="gold-display">💰 <span id="p2-gold">0</span></span>
+                    <span class="label" id="p2-label"><span id="p2-lvl" style="font-size: 0.8em; color: white;">(LVL 1)</span> BOT</span>
+                </div>
+            </div>
+
+            <!-- Skills Panel -->
+            <div id="skills-panel">
+                <div class="skill-box">
+                    <div class="skill-key">SPC</div>
+                    <div class="skill-icon">DASH</div>
+                    <div class="skill-overlay" id="dash-overlay"></div>
+                    <div class="skill-cd-text" id="dash-text"></div>
+                </div>
+                <div class="skill-box">
+                    <div class="skill-key">SHFT</div>
+                    <div class="skill-icon">SHIELD</div>
+                    <div class="skill-overlay" id="shield-overlay"></div>
+                    <div class="skill-cd-text" id="shield-text"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="start-screen" class="screen">
+            <h1>Neon Legends</h1>
+            <p>DESTROY THE ENEMY NEXUS TO WIN.<br>
+            Kill Minions and Towers to earn GOLD.<br>
+            GOLD increases your HP and DAMAGE automatically.<br>
+            SHIFT for SHIELD. SPACE for DASH.</p>
+            <button id="start-btn">Start Game</button>
+        </div>
+
+        <div id="game-over-screen" class="screen hidden">
+            <h1 id="outcome-title">GAME OVER</h1>
+            <p id="outcome-message"></p>
+            <button id="restart-btn">Play Again</button>
+        </div>
+    </div>
+    <script type="module" src="/index.tsx"></script>
+</body>
+</html>
