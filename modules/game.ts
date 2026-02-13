@@ -4,6 +4,7 @@ import { moveEntity, checkWallCollision } from './physics';
 import { getBotAction } from './ai';
 import { spawnMinionWave, updateMinions, updateTowers } from './gameLogic';
 import { Skills } from './skills';
+import { SoundManager } from './audio';
 
 export const Game = {
     state: {} as GameState,
@@ -54,6 +55,9 @@ export const Game = {
             color: team === 'player' ? '#fbbf24' : '#fca5a5',
             sourceId
         });
+        
+        // SFX: Shoot
+        SoundManager.shoot(team === 'player');
     },
 
     initTowers() {
@@ -125,6 +129,9 @@ export const Game = {
         this.state.nextWaveTime = CONFIG.MINION.FIRST_WAVE_DELAY;
         this.state.lastTime = performance.now();
         this.state.outcome = null;
+        
+        // SFX: Start/Respawn
+        SoundManager.respawn();
     },
 
     updateEntityReload(entity: Entity, dt: number) {
@@ -141,6 +148,7 @@ export const Game = {
         let finalDamage = damage;
         if (target.shieldSkillActive) {
             finalDamage *= (1 - CONFIG.SHIELD_SKILL.DAMAGE_REDUCTION);
+            SoundManager.shield(); // SFX: Shield Hit
         }
         if (target.shield && target.shield > 0) {
             target.shield -= finalDamage;
@@ -183,6 +191,9 @@ export const Game = {
         entity.dashing = false;
         entity.shieldSkillCooldown = 0;
         entity.shieldSkillActive = false;
+        
+        // SFX: Respawn
+        SoundManager.respawn();
     },
 
     checkEnemyStructureCollision(x: number, y: number, r: number, myTeam: Team) {
@@ -212,8 +223,14 @@ export const Game = {
     checkWin() {
         const pNexus = this.state.towers.find(t => t.team === 'player' && t.tier === 4);
         const bNexus = this.state.towers.find(t => t.team === 'bot' && t.tier === 4);
-        if (pNexus && pNexus.dead) this.state.outcome = "DEFEAT";
-        else if (bNexus && bNexus.dead) this.state.outcome = "VICTORY";
+        if (pNexus && pNexus.dead) {
+            this.state.outcome = "DEFEAT";
+            SoundManager.defeat();
+        }
+        else if (bNexus && bNexus.dead) {
+            this.state.outcome = "VICTORY";
+            SoundManager.victory();
+        }
     },
 
     // --- MAIN GAME LOOP ---
@@ -237,8 +254,13 @@ export const Game = {
             Skills.update(p, dt);
             
             // Skill triggers from Input
-            if (input.dash && Skills.tryDash(p)) this.createParticles(p.x, p.y, '#fff', 5, 2);
-            if (input.shield) Skills.tryShield(p);
+            if (input.dash && Skills.tryDash(p)) {
+                this.createParticles(p.x, p.y, '#fff', 5, 2);
+                SoundManager.dash(); // SFX
+            }
+            if (input.shield && Skills.tryShield(p)) {
+                SoundManager.shield(); // SFX
+            }
 
             let moveX = 0; 
             let moveY = 0;
@@ -280,6 +302,7 @@ export const Game = {
                 p.dead = true;
                 p.respawnTimer = CONFIG.PLAYER.RESPAWN_TIME;
                 this.createParticles(p.x, p.y, CONFIG.PLAYER.COLOR, 15, 3);
+                SoundManager.die(); // SFX
             }
         } else {
             p.respawnTimer -= dt;
@@ -299,8 +322,13 @@ export const Game = {
                 b.targetMoveY = action.moveY;
                 b.angle = action.aimAngle;
                 
-                if (action.dash && Skills.tryDash(b)) this.createParticles(b.x, b.y, '#fff', 5, 2);
-                if (action.shield) Skills.tryShield(b);
+                if (action.dash && Skills.tryDash(b)) {
+                    this.createParticles(b.x, b.y, '#fff', 5, 2);
+                    SoundManager.dash(); // SFX
+                }
+                if (action.shield && Skills.tryShield(b)) {
+                    SoundManager.shield(); // SFX
+                }
 
                 if (action.reload && !b.reloading && b.ammo < CONFIG.AMMO.MAX) {
                     b.reloading = true;
@@ -337,6 +365,7 @@ export const Game = {
                 b.dead = true;
                 b.respawnTimer = CONFIG.PLAYER.RESPAWN_TIME;
                 this.createParticles(b.x, b.y, CONFIG.BOT.COLOR, 15, 3);
+                SoundManager.die(); // SFX
             }
         } else {
             b.respawnTimer -= dt;
@@ -378,6 +407,7 @@ export const Game = {
                         this.createParticles(nextX, nextY, t.team === 'player' ? CONFIG.PLAYER.COLOR : CONFIG.BOT.COLOR, 5, 2);
                         this.createHitMarker(nextX, nextY);
                         hit = true;
+                        SoundManager.hit(); // SFX: Hit Character
                         if (t.hp <= 0 && !t.dead) {
                             if (owner.team !== t.team) owner.gold += 300; 
                         }
@@ -393,11 +423,19 @@ export const Game = {
                     if (dist < CONFIG.MINION.RADIUS + CONFIG.BULLET.RADIUS) {
                         m.hp -= bul.damage;
                         this.createParticles(nextX, nextY, '#fff', 2, 1);
+                        SoundManager.hit(); // SFX: Hit Minion
                         if (m.hp <= 0 && !m.dead) {
                             m.dead = true;
                             this.createParticles(m.x, m.y, m.team === 'player' ? '#93c5fd' : '#fca5a5', 5, 1);
-                            if (bul.team === 'player') this.state.player.gold += m.goldValue;
-                            if (bul.team === 'bot') this.state.bot.gold += m.goldValue;
+                            
+                            // Gold reward logic
+                            if (bul.team === 'player') {
+                                this.state.player.gold += m.goldValue;
+                                SoundManager.gold(); // SFX: Gold
+                            }
+                            if (bul.team === 'bot') {
+                                this.state.bot.gold += m.goldValue;
+                            }
                         } 
                         hit = true;
                         break;
@@ -412,6 +450,7 @@ export const Game = {
                     if (dist < t.radius + CONFIG.BULLET.RADIUS) {
                         hit = true;
                         this.createParticles(nextX, nextY, t.color, 3, 1);
+                        SoundManager.hitTower(); // SFX: Tower Clank
                         if (t.invulnerable) break; 
                         
                         let finalDamage = bul.damage;
@@ -431,14 +470,20 @@ export const Game = {
 
                         if (t.hp <= 0) {
                             t.dead = true;
-                            this.createParticles(t.x, t.y, t.color, 30, 5); 
+                            this.createParticles(t.x, t.y, t.color, 30, 5);
+                            SoundManager.die(); // SFX: Tower Explode 
                             let reward = 0;
                             if (t.tier === 1) reward = CONFIG.TOWER.TIER_1.GOLD;
                             else if (t.tier === 2) reward = CONFIG.TOWER.TIER_2.GOLD;
                             else if (t.tier === 3) reward = CONFIG.TOWER.TIER_3.GOLD;
                             else reward = CONFIG.TOWER.NEXUS.GOLD;
-                            if (bul.team === 'player') this.state.player.gold += reward;
+                            
+                            if (bul.team === 'player') {
+                                this.state.player.gold += reward;
+                                SoundManager.gold(); // SFX: Gold
+                            }
                             else this.state.bot.gold += reward;
+                            
                             this.unlockNextTier(t.team, t.tier);
                             if (t.tier === 4) this.checkWin();
                         }

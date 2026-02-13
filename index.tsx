@@ -7,6 +7,7 @@ import { RLEnvironment } from './RL/environment';
 import { RLStorage } from './RL/storage';
 import { RLAction, RLObservation } from './RL/types';
 import { getBotAction } from './modules/ai';
+import { SoundManager } from './modules/audio';
 
 let camera = { x: 0, y: 0 };
 
@@ -225,6 +226,10 @@ function loop(timestamp: number) {
 }
 
 document.getElementById('start-btn')?.addEventListener('click', () => {
+    // AUDIO INIT
+    SoundManager.init();
+    SoundManager.resume();
+
     document.getElementById('start-screen')!.classList.add('hidden');
     Game.resetState();
     Game.state.lastTime = performance.now();
@@ -233,6 +238,9 @@ document.getElementById('start-btn')?.addEventListener('click', () => {
 });
 
 document.getElementById('restart-btn')?.addEventListener('click', () => {
+    // AUDIO RESUME
+    SoundManager.resume();
+
     document.getElementById('game-over-screen')!.classList.add('hidden');
     Game.resetState();
     Game.state.lastTime = performance.now();
@@ -240,6 +248,12 @@ document.getElementById('restart-btn')?.addEventListener('click', () => {
     isAfkMode = false;
     document.getElementById('afk-overlay')?.classList.add('hidden');
 });
+
+// Global click to ensure AudioContext is unlocked
+window.addEventListener('click', () => {
+    SoundManager.init();
+    SoundManager.resume();
+}, { once: true });
 
 draw(ctx, Game.state, camera);
 requestAnimationFrame(loop);
