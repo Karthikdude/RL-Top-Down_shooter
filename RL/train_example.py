@@ -3,11 +3,13 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
+import glob
+import os
 
 # ==========================================
 # 1. CONFIGURATION
 # ==========================================
-DATA_FILE = 'rl_training_data.json'
+DATA_DIR = 'data' # Look in data folder
 BATCH_SIZE = 64
 EPOCHS = 50
 LEARNING_RATE = 0.001
@@ -49,31 +51,54 @@ class BotBrain(nn.Module):
 # 3. LOAD & PROCESS DATA
 # ==========================================
 class NeonDataset(Dataset):
-    def __init__(self, json_file):
-        try:
-            with open(json_file, 'r') as f:
-                data = json.load(f)
-        except FileNotFoundError:
-            print(f"Error: {json_file} not found. Please record data in the web game first!")
-            data = []
-
+    def __init__(self, data_dir):
         self.samples = []
-        for entry in data:
-            # Inputs: "state"
-            s = entry['state']
-            obs = [s['hp'], s['enemyHp'], s['distToEnemy'], s['angleToEnemy'], 
-                   s['ammo'], s['canDash'], s['canShield']]
-            
-            # Targets: "action" (Discrete Indices)
-            a = entry['action']
-            
-            self.samples.append({
-                'obs': torch.tensor(obs, dtype=torch.float32),
-                'move': torch.tensor(a['moveIndex'], dtype=torch.long),
-                'aim': torch.tensor(a['aimIndex'], dtype=torch.long),
-                'shoot': torch.tensor(a['shoot'], dtype=torch.long),
-                'skill': torch.tensor(a['skillIndex'], dtype=torch.long)
-            })
+        
+        # Find all .jsonl files in data folder
+        files = glob.glob(os.path.join(data_dir, '*.jsonl'))
+        
+        # Fallback to legacy .json if no .jsonl found
+        if not files:
+            files = glob.glob('*.json')
+
+        print(f"Found {len(files)} log files. Loading...")
+
+        for file_path in files:
+            with open(file_path, 'r') as f:
+                if file_path.endswith('.jsonl'):
+                    # JSON Lines format
+                    for line in f:
+                        if line.strip():
+                            try:
+                                entry = json.loads(line)
+                                self._add_entry(entry)
+                            except:
+                                pass # Skip bad lines
+                else:
+                    # Legacy JSON Array format
+                    try:
+                        data = json.load(f)
+                        for entry in data:
+                            self._add_entry(entry)
+                    except:
+                        pass
+
+    def _add_entry(self, entry):
+        # Inputs: "state"
+        s = entry['state']
+        obs = [s['hp'], s['enemyHp'], s['distToEnemy'], s['angleToEnemy'], 
+               s['ammo'], s['canDash'], s['canShield']]
+        
+        # Targets: "action" (Discrete Indices)
+        a = entry['action']
+        
+        self.samples.append({
+            'obs': torch.tensor(obs, dtype=torch.float32),
+            'move': torch.tensor(a['moveIndex'], dtype=torch.long),
+            'aim': torch.tensor(a['aimIndex'], dtype=torch.long),
+            'shoot': torch.tensor(a['shoot'], dtype=torch.long),
+            'skill': torch.tensor(a['skillIndex'], dtype=torch.long)
+        })
 
     def __len__(self):
         return len(self.samples)
@@ -85,9 +110,10 @@ class NeonDataset(Dataset):
 # 4. TRAINING LOOP
 # ==========================================
 def train():
-    print("Loading data...")
-    dataset = NeonDataset(DATA_FILE)
-    if len(dataset) == 0: return
+    dataset = NeonDataset(DATA_DIR)
+    if len(dataset) == 0: 
+        print("No training data found in /data folder!")
+        return
 
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
     model = BotBrain()
