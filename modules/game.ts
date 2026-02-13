@@ -126,6 +126,7 @@ export const Game = {
         this.state.hitMarkers = [];
         this.state.running = true;
         this.state.gameTime = 0;
+        this.state.botTimer = 0; // IMPORTANT: Initialize bot timer
         this.state.nextWaveTime = CONFIG.MINION.FIRST_WAVE_DELAY;
         this.state.lastTime = performance.now();
         this.state.outcome = null;

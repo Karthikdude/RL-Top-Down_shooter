@@ -11,9 +11,9 @@ export function draw(ctx: CanvasRenderingContext2D, state: GameState, camera: {x
     ctx.fillStyle = '#1e293b'; 
     ctx.fillRect(0, 0, CONFIG.WIDTH, CONFIG.HEIGHT);
     
-    // Mid Lane
+    // Mid Lane (Centered at y=800, width 400 => 600 to 1000)
     ctx.fillStyle = '#334155'; 
-    ctx.fillRect(0, 250, CONFIG.WIDTH, 400); // Expanded slightly for better movement
+    ctx.fillRect(0, 600, CONFIG.WIDTH, 400); 
 
     // Grid
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
@@ -25,7 +25,7 @@ export function draw(ctx: CanvasRenderingContext2D, state: GameState, camera: {x
 
     // River
     ctx.fillStyle = 'rgba(56, 189, 248, 0.2)'; 
-    ctx.fillRect(750, 250, 100, 400);
+    ctx.fillRect(1500, 600, 200, 400); // Centered river crossing
 
     // Fountains (Healing Zones)
     drawFountain(ctx, CONFIG.SPAWNS.PLAYER.x, CONFIG.SPAWNS.PLAYER.y, '#4ade80');
