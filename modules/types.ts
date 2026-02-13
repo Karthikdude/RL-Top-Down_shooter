@@ -1,6 +1,16 @@
 export type Team = 'player' | 'bot';
 export type TowerTier = 1 | 2 | 3 | 4; // 1: Outer, 2: Inner, 3: Base Turret, 4: Nexus (Base)
 
+export interface InputState {
+    moveX: number;
+    moveY: number;
+    aimAngle: number;
+    shoot: boolean;
+    reload: boolean;
+    dash: boolean;
+    shield: boolean;
+}
+
 export interface Entity {
     id: number; // For turret tracking
     x: number;
@@ -117,4 +127,5 @@ export interface GameState {
     botTimer: number;
     nextWaveTime: number;
     entityIdCounter: number; // To assign unique IDs
+    outcome?: "VICTORY" | "DEFEAT" | null; // Added outcome tracking
 }
