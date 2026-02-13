@@ -1,4 +1,3 @@
-
 import { Experience } from './types';
 
 export class RLStorage {
@@ -12,6 +11,7 @@ export class RLStorage {
 
     connectToServer() {
         try {
+            // Attempt to connect to local Node.js server
             this.socket = new WebSocket('ws://localhost:8080');
             
             this.socket.onopen = () => {
@@ -28,24 +28,33 @@ export class RLStorage {
 
             this.socket.onerror = () => {
                 // Silent fail: User probably didn't run server.js
+                // We don't want to spam the console
                 this.isConnected = false;
+                this.toggleRecordUI(false);
             };
 
         } catch (e) {
-            console.log("Server not available.");
+            console.log("Server not available, using local storage.");
+            this.isConnected = false;
         }
     }
 
     // Helper to update UI based on server status
     toggleRecordUI(connected: boolean) {
         const dwnBtn = document.getElementById('download-btn');
-        if (dwnBtn) {
+        const recBtn = document.getElementById('record-btn');
+        
+        if (dwnBtn && recBtn) {
             if (connected) {
                 dwnBtn.style.display = 'none'; // No need to download manually
-                const recBtn = document.getElementById('record-btn');
-                if(recBtn) recBtn.innerText = "Start Recording (Server Active)";
+                if (recBtn.innerText.includes('Start')) {
+                    recBtn.innerText = "Start Recording (Server Active)";
+                }
             } else {
                 dwnBtn.style.display = 'block';
+                if (recBtn.innerText.includes('Server Active')) {
+                    recBtn.innerText = "Start Recording";
+                }
             }
         }
     }
@@ -57,6 +66,7 @@ export class RLStorage {
         } else {
             // FALLBACK MODE: Save to RAM
             this.logs.push(exp);
+            // Limit RAM usage to last 10k frames (approx 3 mins) to prevent crashes
             if (this.logs.length > 10000) this.logs.shift();
         }
     }
@@ -64,6 +74,11 @@ export class RLStorage {
     downloadLogs() {
         if (this.isConnected) {
             alert("Data is already saved in the /data folder via server.js!");
+            return;
+        }
+
+        if (this.logs.length === 0) {
+            alert("No data recorded yet! Play a game while recording first.");
             return;
         }
 

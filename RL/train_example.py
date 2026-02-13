@@ -54,12 +54,13 @@ class NeonDataset(Dataset):
     def __init__(self, data_dir):
         self.samples = []
         
-        # Find all .jsonl files in data folder
-        files = glob.glob(os.path.join(data_dir, '*.jsonl'))
-        
-        # Fallback to legacy .json if no .jsonl found
-        if not files:
+        # Check if data_dir exists
+        if not os.path.exists(data_dir):
+            print(f"Directory '{data_dir}' not found. Looking in current directory for .json files...")
             files = glob.glob('*.json')
+        else:
+            # Find all .jsonl and .json files
+            files = glob.glob(os.path.join(data_dir, '*.jsonl')) + glob.glob(os.path.join(data_dir, '*.json'))
 
         print(f"Found {len(files)} log files. Loading...")
 
@@ -78,10 +79,13 @@ class NeonDataset(Dataset):
                     # Legacy JSON Array format
                     try:
                         data = json.load(f)
-                        for entry in data:
-                            self._add_entry(entry)
+                        if isinstance(data, list):
+                            for entry in data:
+                                self._add_entry(entry)
                     except:
                         pass
+        
+        print(f"Loaded {len(self.samples)} valid samples.")
 
     def _add_entry(self, entry):
         # Inputs: "state"
@@ -112,7 +116,8 @@ class NeonDataset(Dataset):
 def train():
     dataset = NeonDataset(DATA_DIR)
     if len(dataset) == 0: 
-        print("No training data found in /data folder!")
+        print("No training data found in /data folder or current directory!")
+        print("Please record some gameplay first.")
         return
 
     dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
@@ -158,11 +163,14 @@ def train():
     print("Model saved to 'bot_brain.pth'")
 
     # Export to ONNX (For use in Web)
-    dummy_input = torch.randn(1, INPUT_SIZE)
-    torch.onnx.export(model, dummy_input, "bot_brain.onnx", 
-                      input_names=['observation'], 
-                      output_names=['move', 'aim', 'shoot', 'skill'])
-    print("Model exported to 'bot_brain.onnx' for web usage!")
+    try:
+        dummy_input = torch.randn(1, INPUT_SIZE)
+        torch.onnx.export(model, dummy_input, "bot_brain.onnx", 
+                        input_names=['observation'], 
+                        output_names=['move', 'aim', 'shoot', 'skill'])
+        print("Model exported to 'bot_brain.onnx' for web usage!")
+    except Exception as e:
+        print(f"ONNX export failed: {e}")
 
 if __name__ == "__main__":
     train()
